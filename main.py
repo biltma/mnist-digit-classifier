@@ -1,4 +1,5 @@
 import sys
+import pickle
 import os.path as path
 import numpy as np
 import scipy.io as sio
@@ -9,6 +10,7 @@ np.warnings.filterwarnings('ignore')
 
 OVERWRITE_XHAT_OVA = False
 OVERWRITE_XHAT_OVO = False
+OVERWRITE_KMEANS = True
 
 def load_data(filename):
     data = sio.loadmat(filename)
@@ -24,7 +26,7 @@ def clean_data(testX, trainX):
 
     # determine which pixels are mostly blank by iterating rows of trainX and removing all rows with less than min_nonzero nonzero entries
     min_nonzero = 600 # threshold for minimum number of images with nonzero values for the pixel
-    for i, row in enumerate(trainX.T): # for x in X gives columns of X, but we want rows of X so we are transposing X before retrievings the columns
+    for i, row in enumerate(trainX.T): # examples in trainX are rows not columns, so to iterate over pixel indeces, we transpose trainX since enumerate returns the rows
         if(np.count_nonzero(row) < min_nonzero):
             rows_to_remove.append(i)
     print("Removed {} rows for having too few nonzero entries".format(len(rows_to_remove)))
@@ -111,6 +113,50 @@ def test_one_v_one(testX, testY, XHat):
     yhat = np.argmax(YBar, axis=0).reshape((1, YBar.shape[1]))
     return yhat
 
+# def train_kmeans(trainX, K, P):
+#     C = np.random.randint(K, size=(1, trainX.shape[0]))
+#     Z = np.zeros((K, trainX.shape[1]))
+#     Jclust = np.zeros(P)
+#     for j in range(P):
+#         print("Starting iteration {}".format(j + 1))
+#         L2 = np.zeros((trainX.shape[0], K))
+#         for i in range(K):
+#             Xi = trainX[C[0,:] == i,:]
+#             z = (1 / Xi.shape[0]) * np.sum(Xi, axis=0)
+#             Z[i,:] = z
+
+#             e = np.linalg.norm(trainX - Z[i,:], axis=1)
+#             L2[:,i] = e ** 2
+#         Jclust[j] = np.sum(np.argmin(L2, axis=1))
+#         if(not(j == P - 1)):
+#             C = np.argmin(L2, axis=1).reshape(1, L2.shape[0])
+#     return C, Z, Jclust
+
+def train_kmeans(trainX, K, P):
+    C = np.random.randint(K, size=(1, trainX.shape[0]))
+    Z = np.zeros((K, trainX.shape[1]))
+    Jclust = np.zeros(P)
+    # Add one iteration because iteration 0 is initializing z0
+    for j in range(P + 1):
+        print("Starting iteration {}".format(j + 1))
+        L2 = np.zeros((trainX.shape[0], K))
+        for i in range(K):
+            Xi = trainX[C[0,:] == i,:]
+            z = (1 / Xi.shape[0]) * np.sum(Xi, axis=0)
+            Z[i,:] = z
+
+            e = np.linalg.norm(trainX - Z[i,:], axis=1)
+            L2[:,i] = e ** 2
+        if(not(j == 0)):
+            # Skip the first iteration because that is just initiazing z0
+            Jclust[j - 1] = np.sum(np.argmin(L2, axis=1))
+        if(not(j == P)):
+            # Skip the last iteration so that C and Z are not out of sync (C would be ahead by 1 iteration). This is likely entirely unnecessary
+            C = np.argmin(L2, axis=1).reshape(1, L2.shape[0])
+    kmeans = {"C": C, "Z": Z, "Jclust": Jclust}
+    return kmeans
+
+
 def cycle_test_data(testX, testY, yhat, offset=0):
     cycle = True
     index = offset
@@ -150,6 +196,19 @@ def main():
     yhat_OVO = test_one_v_one(testX, testY, XHat_OVO)
     confusion_OVO = evaluate_confusian(testY, yhat_OVO, "confusion_OVO.csv")
     print_stats(confusion_OVO, "One Vs One")
+
+    kmeans = train_kmeans(trainX, 20, 30) if not(path.exists("kmeans.p")) or OVERWRITE_KMEANS else pickle.load(open("kmeans.p", "rb"))
+    C = kmeans["C"]
+    Z = kmeans["Z"]
+    Jclust = kmeans["Jclust"]
+    plt.plot(Jclust)
+    plt.show()
+    
+    v = input("Would you like to save this result? [Y/n]")
+    if(v == "Y"):
+        kmeans = {"C": C, "Z": Z, "Jclust": Jclust}
+        pickle.dump(kmeans, open("kmeans.p", "wb"))
+
     print("Exiting program successfully")
     
 main()
