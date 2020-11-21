@@ -10,7 +10,7 @@ np.warnings.filterwarnings('ignore')
 
 OVERWRITE_XHAT_OVA = False
 OVERWRITE_XHAT_OVO = False
-OVERWRITE_KMEANS = True
+OVERWRITE_KMEANS = False
 
 def load_data(filename):
     data = sio.loadmat(filename)
@@ -32,7 +32,7 @@ def clean_data(testX, trainX):
     print("Removed {} rows for having too few nonzero entries".format(len(rows_to_remove)))
     clean_testX = np.delete(testX, rows_to_remove, 1)
     clean_trainX = np.delete(trainX, rows_to_remove, 1)
-    return clean_testX, clean_trainX
+    return clean_testX, clean_trainX, rows_to_remove
 
 def add_bias(testX, trainX):
     biased_testX = np.concatenate((testX, np.ones((testX.shape[0], 1))), axis=1)
@@ -145,11 +145,11 @@ def train_kmeans(trainX, K, P):
             z = (1 / Xi.shape[0]) * np.sum(Xi, axis=0)
             Z[i,:] = z
 
-            e = np.linalg.norm(trainX - Z[i,:], axis=1)
-            L2[:,i] = e ** 2
-        if(not(j == 0)):
-            # Skip the first iteration because that is just initiazing z0
-            Jclust[j - 1] = np.sum(np.argmin(L2, axis=1))
+            L2[:,i] = np.square(np.linalg.norm(trainX - Z[i,:], axis=1))
+            if(not(j == 0)):
+                # Skip the first iteration because that is just initiazing z0
+                Ji =  (1 / trainX.shape[0]) * np.sum(np.square(np.linalg.norm(Xi - Z[i,:], axis=1)))
+                Jclust[j - 1] += Ji
         if(not(j == P)):
             # Skip the last iteration so that C and Z are not out of sync (C would be ahead by 1 iteration). This is likely entirely unnecessary
             C = np.argmin(L2, axis=1).reshape(1, L2.shape[0])
@@ -181,23 +181,23 @@ def print_stats(confusion, alg_name):
     
     print("Percent Error for ${}: {}%".format(alg_name, (1 - total_correct / np.sum(confusion)) * 100))
     
-
 def main():
     raw_testX, testY, raw_trainX, trainY = load_data("mnist")
-    clean_testX, clean_trainX = clean_data(raw_testX, raw_trainX)
+    clean_testX, clean_trainX, rows_removed = clean_data(raw_testX, raw_trainX)
     testX, trainX = add_bias(clean_testX, clean_trainX)
 
-    XHat_OVA = train_one_v_all(trainX, trainY, OVERWRITE_XHAT_OVA) if not(path.exists("XHat_OVA.csv")) or OVERWRITE_XHAT_OVA else np.loadtxt("XHat_OVA.csv", delimiter=",")
-    yhat_OVA = test_one_v_all(testX, testY, XHat_OVA)
-    confusion_OVA = evaluate_confusian(testY, yhat_OVA, "confusion_OVA.csv")
-    print_stats(confusion_OVA, "One Vs All")
+    # XHat_OVA = train_one_v_all(trainX, trainY, OVERWRITE_XHAT_OVA) if not(path.exists("XHat_OVA.csv")) or OVERWRITE_XHAT_OVA else np.loadtxt("XHat_OVA.csv", delimiter=",")
+    # yhat_OVA = test_one_v_all(testX, testY, XHat_OVA)
+    # confusion_OVA = evaluate_confusian(testY, yhat_OVA, "confusion_OVA.csv")
+    # print_stats(confusion_OVA, "One Vs All")
 
-    XHat_OVO = train_one_v_one(trainX, trainY, OVERWRITE_XHAT_OVO) if not(path.exists("XHat_OVO.csv")) or OVERWRITE_XHAT_OVO else np.loadtxt("XHat_OVO.csv", delimiter=",")
-    yhat_OVO = test_one_v_one(testX, testY, XHat_OVO)
-    confusion_OVO = evaluate_confusian(testY, yhat_OVO, "confusion_OVO.csv")
-    print_stats(confusion_OVO, "One Vs One")
+    # XHat_OVO = train_one_v_one(trainX, trainY, OVERWRITE_XHAT_OVO) if not(path.exists("XHat_OVO.csv")) or OVERWRITE_XHAT_OVO else np.loadtxt("XHat_OVO.csv", delimiter=",")
+    # yhat_OVO = test_one_v_one(testX, testY, XHat_OVO)
+    # confusion_OVO = evaluate_confusian(testY, yhat_OVO, "confusion_OVO.csv")
+    # print_stats(confusion_OVO, "One Vs One")
 
-    kmeans = train_kmeans(trainX, 20, 30) if not(path.exists("kmeans.p")) or OVERWRITE_KMEANS else pickle.load(open("kmeans.p", "rb"))
+    KMEANS_PATH = "kmeans.p"
+    kmeans = train_kmeans(trainX, 10, 20) if not(path.exists(KMEANS_PATH)) or OVERWRITE_KMEANS else pickle.load(open(KMEANS_PATH, "rb"))
     C = kmeans["C"]
     Z = kmeans["Z"]
     Jclust = kmeans["Jclust"]
@@ -207,7 +207,23 @@ def main():
     v = input("Would you like to save this result? [Y/n]")
     if(v == "Y"):
         kmeans = {"C": C, "Z": Z, "Jclust": Jclust}
-        pickle.dump(kmeans, open("kmeans.p", "wb"))
+        pickle.dump(kmeans, open(KMEANS_PATH, "wb"))
+
+    paddedZ = np.zeros((Z.shape[0], raw_trainX.shape[1]))
+    for i in range(Z.shape[0]):
+        zpad = np.zeros((1, raw_trainX.shape[1]))
+        offset = 0
+        for j in range(raw_trainX.shape[1]):
+            if(j in rows_removed):
+                zpad[0, j] = 0
+                offset += 1
+            else: 
+                zpad[0, j] = Z[i,j - offset]
+        
+        plt.figure()
+        plt.imshow(zpad.reshape(28, 28), cmap="binary")
+        plt.show()
+        
 
     print("Exiting program successfully")
     
