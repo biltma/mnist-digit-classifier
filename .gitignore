@@ -1,5 +1,7 @@
-XHat_OVA.csv
-XHat_OVO.csv
-confusion_OVA.csv
-confusion_OVO.csv
-kmeans.p
+ova.p
+ovo.p
+kmeans-k20-p30.p
+kmeans-k10-p20.p
+kmeans-k5-p10.p
+confusion_ova.csv
+confusion_ovo.csv
