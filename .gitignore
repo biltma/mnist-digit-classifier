@@ -5,3 +5,5 @@ kmeans-k10-p20.p
 kmeans-k5-p10.p
 confusion_ova.csv
 confusion_ovo.csv
+
+.ipynb_checkpoints
