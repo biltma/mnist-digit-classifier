@@ -17,7 +17,7 @@ SAVE_CONFUSION = False
 OUTPUT_FOLDER = "output/"
 OVA_FILE = OUTPUT_FOLDER + "ova.p"
 OVO_FILE = OUTPUT_FOLDER + "ovo.p"
-KMEANS_FILE = OUTPUT_FOLDER + "kmeans-k20-p30.p"
+KMEANS_FILE = OUTPUT_FOLDER + "kmeans.p"
 
 def load_data(filename):
     data = sio.loadmat(filename)
@@ -207,7 +207,6 @@ def plot_kmeans(trainX, kmeans, rows_removed):
 
         # pad z's to make sure vector is 784 long (this alg is junky, but it does the job and speed isn't important at all)
         for i in range(Z.shape[0]):
-            print("Z index {}".format(i))
             nearestPoints = np.zeros((10, Z.shape[1]))
             L2 = np.square(np.linalg.norm(trainX - Z[i,:], axis=1))
             for x in range(10):
@@ -215,7 +214,6 @@ def plot_kmeans(trainX, kmeans, rows_removed):
                 min_x = trainX[min_x_idx,:]
                 nearestPoints[x,:] = min_x
                 L2[min_x_idx] = np.max(L2)
-                print("X index {}".format(min_x_idx))
             axs = plt.subplot(11, Z.shape[0], i + 1)
             zpad = np.zeros((1, L))
             nearestPointsPad = np.zeros((10, L))
@@ -248,7 +246,7 @@ def cycle_test_data(testX, testY, yhat, offset=0):
     index = offset
     plt.figure()
     plt.imshow(testX[index,:].reshape(28, 28), cmap="gray", vmin=0, vmax=255)
-    # print("Predicted: {}, Actual: {}".format(yhat[0, index], testY[0, index]))
+    print("Predicted: {}, Actual: {}".format(yhat[0, index], testY[0, index]))
     plt.show(block=False)
     while(cycle):
         value = input("Press 'Enter' to show next digit. Press any other key (then 'Enter') to exit.")
@@ -256,7 +254,7 @@ def cycle_test_data(testX, testY, yhat, offset=0):
             cycle = False
         else:
             plt.imshow(testX[index,:].reshape(28, 28), cmap="binary")
-            # print("Predicted: {}, Actual: {}".format(yhat[0, index], testY[0, index]))
+            print("Predicted: {}, Actual: {}".format(yhat[0, index], testY[0, index]))
             plt.show(block=False)
             index += 1
 
@@ -284,7 +282,9 @@ def main():
     confusion_OVO = evaluate_confusian(testY, yhat_ovo, save=SAVE_CONFUSION, filename=OUTPUT_FOLDER + "confusion_ovo.csv")
     print_stats(confusion_OVO, "One Vs One")
 
-    Kmeans = train_kmeans(trainX, 20, 30, SAVE_KMEANS, KMEANS_FILE) if not(path.exists(KMEANS_FILE)) else pickle.load(open(KMEANS_FILE, "rb"))
+    K = 20
+    P = 30
+    Kmeans = train_kmeans(trainX, K, P, SAVE_KMEANS, KMEANS_FILE) if not(path.exists(KMEANS_FILE)) else pickle.load(open(KMEANS_FILE, "rb"))
     min_kmeans = Kmeans["min"]
     max_kmeans = Kmeans["max"]
     plot_kmeans(trainX, [min_kmeans, max_kmeans], rows_removed)
